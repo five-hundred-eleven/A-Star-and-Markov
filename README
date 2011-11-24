@@ -1,0 +1,10 @@
+Cython
+
+google cython for full documentation.
+cython is available in most linux repositories, including apt-get.
+
+setup.py is a Makefile template. 
+Open it and change extensionname to the desired module name and filename.pyx to the name of the pyx file.
+
+to make, execute:
+./setup.py build_ext --inplace
