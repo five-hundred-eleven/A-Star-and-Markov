@@ -98,6 +98,7 @@ class MyBot:
 		self.stored_paths = {}
 		self.path_dists = {}
 		self.food_locs = []
+		self.bookkeeping = []
 		for row in range(0, ants.rows):
 			for col in range(0, ants.cols):
 				self.unseen.append((row, col))
@@ -166,7 +167,7 @@ class MyBot:
 						continue
 					else:
 						# set f' and g'
-						fp = f + 1
+						fp = f + 1 
 						gp = ants.distance(adj_loc, dest)
 						# add to frontier and visited
 						frontier.append(frontier_node(h_val=fp + gp, f_val=fp, location=adj_loc, parent=this_path_node))
@@ -174,6 +175,8 @@ class MyBot:
 				# dead end. This occurs when there is no visible path to dest
 				if len(frontier) == 0:
 					return start_loc 
+				if len(frontier)*5 > ants.time_remaining():
+					return start_loc
 				# sort frontier, so the node with lowest h is at the front
 				frontier.sort()
 				# pop off node with the lowest h value for next iteration
@@ -275,9 +278,7 @@ class MyBot:
 			if hill_loc in ants.my_ants():
 				orders[hill_loc] = None
 
-		# find close food
-		dists = []
-		food_targets = [] 
+		# update food_locs
 		indexes = []
 		for food_loc in ants.food():
 			if food_loc not in self.food_locs:
@@ -287,42 +288,99 @@ class MyBot:
 				indexes.insert(0, i)
 		for i in indexes:
 			self.food_locs.pop(i)
+
+		# update enemy hills
+		for hill_loc, hill_owner in ants.enemy_hills():
+			if hill_loc not in self.hills:
+				self.hills.append(hill_loc)
+		for hill_loc in self.hills:
+			if hill_loc not in [loc for loc, owner in ants.enemy_hills()]:
+				self.hills.remove(hill_loc)
+
+		food_targets = [] 
+		explore_targets = []
+		new_bookkeeping = []
+		while len(self.bookkeeping) > 0:
+			type, ant_loc, target_loc = self.bookkeeping.pop()
+			if ant_loc not in available_ants:
+				continue
+			if (ant_loc, target_loc) not in self.stored_paths:
+				continue
+			if type == 'food':
+				if target_loc not in self.food_locs:
+					continue
+				else:
+					food_targets.append(target_loc)
+					dest = self.stored_paths[(ant_loc, target_loc)]
+					do_move_location(ant_loc, dest)
+					if dest != target_loc:
+						new_bookkeeping.append(('food', dest, target_loc))
+			if type == 'hill':
+				if target_loc not in self.hills:
+					continue
+				else:
+					dest = self.stored_paths[(ant_loc, target_loc)]
+					do_move_location(ant_loc, dest)
+					if dest != target_loc:
+						new_bookkeeping.append(('hill', dest, target_loc))
+
+		self.bookkeeping = new_bookkeeping
+
+		# find close food
+		dists = []
 		for food_loc in self.food_locs:
-			for ant_loc in available_ants: 
-				for adj_loc in get_adjacent(ants, food_loc):
-					if ants.passable(adj_loc):
-						dist = fdistance(ant_loc, adj_loc)
-						dists.append((dist, ant_loc, adj_loc))
-				dist = ants.distance(ant_loc, food_loc)
-				dists.append((dist, ant_loc, food_loc))
+			if food_loc not in food_targets:
+				for ant_loc in available_ants: 
+					dist = fdistance(ant_loc, food_loc)
+					dists.append((dist, ant_loc, food_loc))
 		dists.sort()
 		for dist, ant_loc, food_loc in dists:
-			if food_loc not in food_targets: 
+			if food_loc not in food_targets and ant_loc in available_ants: 
 				food_targets.append(food_loc)
-				do_move_location(ant_loc, find_path(ant_loc, food_loc))
-
+				dest = find_path(ant_loc, food_loc)
+				do_move_location(ant_loc, dest)
+				if dest != food_loc and (dest, food_loc) in self.stored_paths:
+					self.bookkeeping.append(('food', dest, food_loc))
 		
+		# attack hills
 		if ants.time_remaining() > 150:
 			dists = []
-			explore_targets = []
+			for hill_loc in self.hills:
+				for ant_loc in available_ants:
+					dist = fdistance(ant_loc, hill_loc)
+					dists.append((dist, ant_loc, hill_loc))
+			dists.sort()
+			for dist, ant_loc, hill_loc in dists:
+				if ants.time_remaining() < dist*12:
+					break
+				if ant_loc in available_ants:
+					dest = find_path(ant_loc, hill_loc)
+					do_move_location(ant_loc, dest)
+					if (dest, hill_loc) in self.stored_paths:
+						self.bookkeeping.append(('hill', dest, hill_loc))
+		
+		# explore the map
+		if ants.time_remaining() > 150:
+			dists = []
 			for explore_loc in self.explore_locs:
 				for ant_loc in available_ants:
 					dist = fdistance(ant_loc, explore_loc)
 					dists.append((dist, ant_loc, explore_loc))
 			dists.sort()
 			for dist, ant_loc, explore_loc in dists:
-				if ants.time_remaining() < dist*11:
+				if ants.time_remaining() < dist*12:
 					break
-				if explore_loc not in explore_targets:
+				if explore_loc not in explore_targets and ant_loc in available_ants:
 					explore_targets.append(explore_loc)
-					do_move_location(ant_loc, find_path(ant_loc, explore_loc))
+					dest = find_path(ant_loc, explore_loc)
+					do_move_location(ant_loc, dest)
 
 		for ant_loc in available_ants:
 			do_move_location(ant_loc, (randint(0, ants.rows), randint(0, ants.cols)))
 
 		# Unblock own hill
 		for hill_loc in ants.my_hills():
-			if hill_loc in ants.my_ants():
+			if hill_loc in available_ants: 
 				for direction in ('s', 'e', 'w', 'n'):
 					if do_move_direction(hill_loc, direction):
 						break
