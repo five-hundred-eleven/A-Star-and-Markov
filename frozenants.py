@@ -90,9 +90,9 @@ class MyBot:
         # initialize data structures after learning the game settings
         self.hills = []
         self.unseen = []
-        self.explore_locs = ants.my_hills() 
-        self.explored = []
-        self.impassable = []
+        self.explore_locs = set(ants.my_hills())
+        self.explored = set([])
+        self.impassable = set([])
         self.MDPs = []
         self.stored_MDPs = {}
         self.stored_paths = {}
@@ -264,10 +264,10 @@ class MyBot:
                     for expanded in expanded_locs: 
                         if 0 <= expanded[0] and expanded[0] < ants.rows and 0 <= expanded[1] and expanded[1] < ants.cols:
                             if expanded not in self.explored and expanded in self.unseen:
-                                self.explore_locs.append(expanded)
-                                self.explored.append(expanded)
+                                self.explore_locs.add(expanded)
+                                self.explored.add(expanded)
                 if not ants.passable(unseen_loc):
-                    self.impassable.append(unseen_loc)
+                    self.impassable.add(unseen_loc)
         for i in indexes:
             self.unseen.pop(i)
 
